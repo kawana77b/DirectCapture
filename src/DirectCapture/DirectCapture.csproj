@@ -10,13 +10,16 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 		<GenerateDocumentationFile>True</GenerateDocumentationFile>
 
-		<Version>0.5.0</Version>
+		<Version>0.5.1</Version>
+		<PackageId>DirectCapture</PackageId>
+		<Title>DirectCapture</Title>
 		<Authors>Shimarisu121</Authors>
 		<Description>C# library aimed at capturing AVI files playable in DirectShow as Bitmap.</Description>
-		<Title>DirectCapture</Title>
-		<Copyright>(c) shimarisu121</Copyright>
+		<Copyright>Copyright $([System.DateTime]::Now.Year) shimarisu121</Copyright>
 		<PackageReadmeFile>README.md</PackageReadmeFile>
-		<RepositoryUrl>https://github.com/kawana77b/Direct-Capture</RepositoryUrl>
+		<PackageLicenseExpression>MIT</PackageLicenseExpression>
+		<RepositoryUrl>https://github.com/kawana77b/DirectCapture</RepositoryUrl>
+		<PackageProjectUrl>https://github.com/kawana77b/DirectCapture</PackageProjectUrl>
 	</PropertyGroup>
 
 	<PropertyGroup Condition="'$(Configuration)|$(TargetFramework)|$(Platform)'=='Debug|net6.0-windows|AnyCPU'">
