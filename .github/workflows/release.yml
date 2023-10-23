@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - "v*.*.*"
+  # for test, this will have to be removed.
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -26,16 +28,19 @@ jobs:
       - name: Restore dependencies
         run: dotnet restore
 
-      - name: build program
+      - name: Build Program
         run: dotnet build --no-restore -c Release
 
-      - name: create nuget package
+      - name: Create Nuget Package
         run: dotnet pack src/DirectCapture/DirectCapture.csproj -c Release --output nupkgs
 
-      - name: create release and upload artifacts
+      - name: Create Release Draft
         uses: softprops/action-gh-release@v1
         if: startsWith(github.ref, 'refs/tags/')
         with:
           draft: true
-          files: |
-            nupkgs/*.nupkg
+
+      - name: Push nuget package to Github Pacakges
+        run: |
+          dotnet nuget add source "https://nuget.pkg.github.com/kawana77b/index.json" -n "github" -u kawana77b -p ${{secrets.GH_PACKAGES_PAT}} --store-password-in-clear-text
+          dotnet nuget push "nupkgs/*.nupkg" --api-key ${{secrets.GH_PACKAGES_PAT}} --source "github" --skip-duplicate
