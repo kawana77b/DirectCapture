@@ -4,8 +4,6 @@ on:
   push:
     tags:
       - "v*.*.*"
-  # for test, this will have to be removed.
-  workflow_dispatch:
 
 permissions:
   contents: write
