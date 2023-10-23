@@ -9,4 +9,4 @@ Includes a few simple utility classes.
 
 ## Links
 
-- [GitHub Repository](https://github.com/kawana77b/Direct-Capture)
+- [GitHub Repository](https://github.com/kawana77b/DirectCapture)
