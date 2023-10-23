@@ -43,4 +43,4 @@ jobs:
       - name: Push nuget package to Github Pacakges
         run: |
           dotnet nuget add source "https://nuget.pkg.github.com/kawana77b/index.json" -n "github" -u kawana77b -p ${{secrets.GH_PACKAGES_PAT}} --store-password-in-clear-text
-          dotnet nuget push "nupkgs/*.nupkg" --api-key ${{secrets.GH_PACKAGES_PAT}} --source "github" --skip-duplicate
+          cd nupkgs && dotnet nuget push "*.nupkg" --api-key ${{secrets.GH_PACKAGES_PAT}} --source "github" --skip-duplicate
