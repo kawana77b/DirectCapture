@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
 	<PropertyGroup>
-		<TargetFrameworks>net6.0-windows;net481</TargetFrameworks>
+		<TargetFrameworks>net8.0-windows;net481</TargetFrameworks>
 		<PlatformTarget>x64</PlatformTarget>
 		<RootNamespace>DirectCapture</RootNamespace>
 
