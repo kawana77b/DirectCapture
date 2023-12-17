@@ -48,7 +48,7 @@ bmp.Save("test.png");
 ## Environment
 
 For Windows only.  
-Target framework is currently configured with .NET 6 (Windows) and .NET Framework 481.  
+Target framework is currently configured with .NET 8 (Windows) and .NET Framework 481.  
 And PlatformTarget is x64.
 
 ## Why did you create this?
