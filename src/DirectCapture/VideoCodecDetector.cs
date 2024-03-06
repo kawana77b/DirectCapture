@@ -21,14 +21,9 @@ namespace DirectCapture
             Unknown,
 
             /// <summary>
-            /// H.264
+            /// H.264 or H.265 or other
             /// </summary>
-            H264,
-
-            /// <summary>
-            /// H.265
-            /// </summary>
-            H265,
+            H264_OR_H265_OR_OTHER,
 
             /// <summary>
             /// MP4 (QuickTime)
@@ -64,8 +59,7 @@ namespace DirectCapture
         /// <remarks>
         /// Only <c>.mp4</c> and <c>.avi</c> are supported. The following are supported:
         /// <list type="bullet">
-        /// <item>H.264</item>
-        /// <item>H.265</item>
+        /// <item>H.264 or H.265 or other</item>
         /// <item>Quick Time (MP4/QuickTime)</item>
         /// <item>MPEG-4 ASP (AVI)</item>
         /// <item>MPEG-4 AVC (AVI)</item>
@@ -92,35 +86,31 @@ namespace DirectCapture
 
                 if (ext == ".mp4")
                 {
-                    if (bytes.Skip(4).Take(4).SequenceEqual(new byte[] { 0x66, 0x74, 0x79, 0x70 }))
+                    if (bytes.Skip(4).Take(6).SequenceEqual(new byte[] { 0x66, 0x74, 0x79, 0x70, 0x71, 0x74 })) // ftypqt
                     {
                         codec = Codec.QuickTimeMP4;
                     }
-                    else if (bytes.Skip(4).Take(4).SequenceEqual(new byte[] { 0x66, 0x72, 0x65, 0x65 }))
+                    else if (bytes.Skip(4).Take(8).SequenceEqual(new byte[] { 0x66, 0x74, 0x79, 0x70, 0x6d, 0x70, 0x34, 0x32 })) // ftypmp42
                     {
-                        codec = Codec.H264;
-                    }
-                    else if (bytes.Skip(4).Take(4).SequenceEqual(new byte[] { 0x77, 0x69, 0x64, 0x65 }))
-                    {
-                        codec = Codec.H265;
+                        codec = Codec.H264_OR_H265_OR_OTHER;
                     }
                 }
 
                 if (ext == ".avi")
                 {
-                    if (bytes.Skip(8).Take(4).SequenceEqual(new byte[] { 0x4d, 0x54, 0x68, 0x64 }))
+                    if (bytes.Skip(8).Take(4).SequenceEqual(new byte[] { 0x4d, 0x54, 0x68, 0x64 })) // MThd
                     {
                         codec = Codec.MotionJPEG;
                     }
-                    else if (bytes.Skip(8).Take(4).SequenceEqual(new byte[] { 0x75, 0x74, 0x76, 0x64 }))
+                    else if (bytes.Skip(8).Take(4).SequenceEqual(new byte[] { 0x75, 0x74, 0x76, 0x64 })) // utvd
                     {
                         codec = Codec.UtVideo;
                     }
-                    else if (bytes.Skip(8).Take(4).SequenceEqual(new byte[] { 0x31, 0x41, 0x56, 0x49 }))
+                    else if (bytes.Skip(8).Take(4).SequenceEqual(new byte[] { 0x31, 0x41, 0x56, 0x49 })) // 1AVI
                     {
                         codec = Codec.MPEG4ASP;
                     }
-                    else if (bytes.Skip(8).Take(4).SequenceEqual(new byte[] { 0x68, 0x64, 0x61, 0x76 }))
+                    else if (bytes.Skip(8).Take(4).SequenceEqual(new byte[] { 0x68, 0x64, 0x61, 0x76 })) // hdav
                     {
                         codec = Codec.MPEG4AVC;
                     }
