@@ -76,14 +76,9 @@ namespace DirectCapture
             OpenStream();
         }
 
-        /// <summary>
-        /// Finalizer of VideoCapture.
-        /// </summary>
-        ~VideoCapture()
-        {
-            // このコードを変更しないでください。クリーンアップ コードを 'Dispose(bool disposing)' メソッドに記述します
-            Dispose(disposing: false);
-        }
+        // No finalizer: the COM object is held by a runtime callable wrapper (RCW),
+        // which releases itself when collected. Calling ReleaseComObject from the
+        // finalizer thread is unsafe, so it is only done from Dispose().
 
 #pragma warning disable CS1591
 
@@ -98,16 +93,11 @@ namespace DirectCapture
         {
             if (!disposedValue)
             {
-                if (disposing)
-                {
-                    // dispose managed state (managed objects)
-                }
-
-                if (_mediaDet != null)
+                if (disposing && _mediaDet != null)
                 {
                     Marshal.ReleaseComObject(_mediaDet);
-                    _mediaDet = null;
                 }
+                _mediaDet = null;
 
                 disposedValue = true;
             }
@@ -161,10 +151,14 @@ namespace DirectCapture
         /// Get the bitmap information of the frame at the specified second.
         /// </summary>
         /// <returns>Bitmap of the current position frame. <c>null</c> may be returned on failure.</returns>
+        /// <exception cref="ObjectDisposedException">This object has been disposed</exception>
         /// <exception cref="InvalidOperationException">The stream is not open</exception>
         /// <exception cref="ArgumentOutOfRangeException">Second is out of range</exception>
         public Bitmap GetBitmap()
         {
+            if (disposedValue)
+                throw new ObjectDisposedException(nameof(VideoCapture));
+
             if (_mediaDet == null)
                 throw new InvalidOperationException("The stream is not open");
 
