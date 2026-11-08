@@ -32,11 +32,14 @@ namespace DirectCapture
         /// <summary>
         /// Get error message
         /// </summary>
+        /// <remarks>
+        /// Formatted as <c>code:{ErrorCode} {message}</c>. The message of the wrapped exception is used when present;
+        /// otherwise a description is looked up from the DirectShow error code.
+        /// </remarks>
         public override string Message
         {
             get
             {
-                // If there is a message, it takes precedence. If it does not exist, the template is used.
                 var msg = string.IsNullOrEmpty(_error.Message) ? GetMessage() : _error.Message;
                 return $"code:{ErrorCode} {msg}";
             }
@@ -45,20 +48,20 @@ namespace DirectCapture
         /// <summary>
         /// Generate a new instance
         /// </summary>
-        /// <param name="error"></param>
+        /// <param name="error">The COM exception to wrap. It becomes <see cref="Exception.InnerException"/>.</param>
         /// <exception cref="ArgumentNullException"><paramref name="error"/> is null.</exception>
+        /// <remarks><see cref="Exception.HResult"/> is set to the error code of <paramref name="error"/>, so callers checking it see the original error.</remarks>
         public VideoStreamException(COMException error)
             : base(error?.Message, error)
         {
             _error = error ?? throw new ArgumentNullException(nameof(error));
-            // Keep the original HRESULT so callers checking HResult see the real error.
             HResult = error.ErrorCode;
         }
 
         /// <summary>
         /// Get error message from error code
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The description of the DirectShow error, or an empty string if the code is unknown.</returns>
         private string GetMessage()
         {
             switch ((uint)ErrorCode)

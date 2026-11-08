@@ -10,9 +10,9 @@ namespace DirectCapture
         /// <summary>
         /// Generate a Frame object from the specified value and frame rate.
         /// </summary>
-        /// <param name="seconds"></param>
-        /// <param name="frameRate"></param>
-        /// <returns></returns>
+        /// <param name="seconds">The time in seconds.</param>
+        /// <param name="frameRate">The frame rate of the video.</param>
+        /// <returns>The frame at <paramref name="seconds"/>. The fractional part of the frame number is truncated.</returns>
         public static Frame FromSeconds(double seconds, double frameRate = 30.0) => new Frame((int)(seconds * frameRate), frameRate);
 
         private int _value;
@@ -58,8 +58,8 @@ namespace DirectCapture
         /// <summary>
         /// Generate a Frame object from the specified value and frame rate.
         /// </summary>
-        /// <param name="value"></param>
-        /// <param name="frameRate"></param>
+        /// <param name="value">The frame number. Negative values are clamped to 0.</param>
+        /// <param name="frameRate">The frame rate of the video. Values below 1.0 are clamped to 1.0.</param>
         public Frame(int value = 0, double frameRate = 30.0)
         {
             Value = value;
@@ -69,19 +69,19 @@ namespace DirectCapture
         /// <summary>
         /// Clone the Frame object.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>A new <see cref="Frame"/> with the same value and frame rate.</returns>
         public Frame Clone() => new Frame(Value, FrameRate);
 
         /// <summary>
         /// Clone the Frame object.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>A new <see cref="Frame"/> with the same value and frame rate.</returns>
         object ICloneable.Clone() => Clone();
 
         /// <summary>
         /// Convert to string.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The frame number and time, such as <c>90 (00:00:03)</c>.</returns>
         public override string ToString() => $"{Value} ({Time})";
     }
 }

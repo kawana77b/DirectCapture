@@ -61,14 +61,23 @@ namespace DirectCapture
             }
         }
 
-        // IMediaDet provides information about the video and important methods for capturing it.
-        // https://learn.microsoft.com/en-US/windows/win32/directshow/imediadet
+        /// <summary>
+        /// The DirectShow media detector used to read frames from the stream.
+        /// </summary>
+        /// <remarks>
+        /// <c>null</c> when the stream is not open or the object has been disposed.
+        /// See <see href="https://learn.microsoft.com/en-US/windows/win32/directshow/imediadet">IMediaDet</see>.
+        /// </remarks>
         private IMediaDet _mediaDet = null;
 
         /// <summary>
         /// Generate a VideoCapture object from the specified file path.
         /// </summary>
         /// <param name="filePath">The file path of the video for which to open the stream. This must be an .avi file available in DirectShow.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="filePath"/> is null or empty.</exception>
+        /// <exception cref="System.IO.FileNotFoundException">The file does not exist.</exception>
+        /// <exception cref="ArgumentException">The file extension is not supported.</exception>
+        /// <exception cref="VideoStreamException">The stream could not be opened.</exception>
         public VideoCapture(string filePath)
         {
             _videoInfo = new VideoInfo(filePath);
@@ -78,26 +87,34 @@ namespace DirectCapture
         /// <summary>
         /// Generate a VideoCapture object from the specified VideoInfo object.
         /// </summary>
-        /// <param name="videoInfo"></param>
+        /// <param name="videoInfo">Information about the video file to open.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="videoInfo"/> is null.</exception>
+        /// <exception cref="VideoStreamException">The stream could not be opened.</exception>
         public VideoCapture(VideoInfo videoInfo)
         {
-            _videoInfo = videoInfo;
+            _videoInfo = videoInfo ?? throw new ArgumentNullException(nameof(videoInfo));
             OpenStream();
         }
 
-        // No finalizer: the COM object is held by a runtime callable wrapper (RCW),
-        // which releases itself when collected. Calling ReleaseComObject from the
-        // finalizer thread is unsafe, so it is only done from Dispose().
-
-#pragma warning disable CS1591
-
+        /// <summary>
+        /// Release the DirectShow resources held by this object.
+        /// </summary>
+        /// <remarks>
+        /// This class has no finalizer. The COM object is held by a runtime callable wrapper (RCW),
+        /// which releases itself when collected; calling <see cref="Marshal.ReleaseComObject(object)"/>
+        /// from the finalizer thread is unsafe, so it is only done here.
+        /// Always dispose this object to release the stream promptly.
+        /// </remarks>
         public void Dispose()
         {
-            // このコードを変更しないでください。クリーンアップ コードを 'Dispose(bool disposing)' メソッドに記述します
             Dispose(disposing: true);
             GC.SuppressFinalize(this);
         }
 
+        /// <summary>
+        /// Release the resources held by this object.
+        /// </summary>
+        /// <param name="disposing"><c>true</c> when called from <see cref="Dispose()"/>.</param>
         protected virtual void Dispose(bool disposing)
         {
             if (!disposedValue)
@@ -112,29 +129,31 @@ namespace DirectCapture
             }
         }
 
-#pragma warning restore CS1591
-
         /// <summary>
         /// Get current position as Frame.
         /// </summary>
-        /// <returns></returns>
+        /// <returns>The frame at <see cref="CurrentPosition"/>.</returns>
         /// <remarks>This may not always correspond exactly to the frame of the file, since it is determined by the stream</remarks>
         public Frame GetCurrentPositionAsFrame() => Frame.FromSeconds(CurrentPosition, FrameRate);
 
         /// <summary>
         /// Set current position from Frame.
         /// </summary>
-        /// <param name="frame"></param>
+        /// <param name="frame">The frame to move to.</param>
+        /// <exception cref="ArgumentNullException"><paramref name="frame"/> is null.</exception>
         /// <remarks>This may not always correspond exactly to the frame of the file, since it is determined by the stream</remarks>
         public void SetCurrentPositionFromFrame(Frame frame)
         {
+            if (frame == null)
+                throw new ArgumentNullException(nameof(frame));
+
             CurrentPosition = frame.Seconds;
         }
 
         /// <summary>
         /// Open the video stream.
         /// </summary>
-        /// <exception cref="VideoStreamException"></exception>
+        /// <exception cref="VideoStreamException">DirectShow could not open the file. The MediaDet object is released before throwing.</exception>
         protected void OpenStream()
         {
             _mediaDet = (IMediaDet)new MediaDet();
@@ -146,12 +165,8 @@ namespace DirectCapture
             }
             catch (COMException e)
             {
-                // In case of an error, immediately release MediaDet resources
                 Marshal.ReleaseComObject(_mediaDet);
                 _mediaDet = null;
-
-                // DESError.ThrowExceptionForHR(hr) throws COMException internally,
-                // so catch it with a wrapped exception
                 throw new VideoStreamException(e);
             }
         }
@@ -159,10 +174,11 @@ namespace DirectCapture
         /// <summary>
         /// Get the bitmap information of the frame at the specified second.
         /// </summary>
-        /// <returns>Bitmap of the current position frame. <c>null</c> may be returned on failure.</returns>
+        /// <returns>A 24bpp bitmap of the frame at <see cref="CurrentPosition"/>. The caller must dispose it.</returns>
         /// <exception cref="ObjectDisposedException">This object has been disposed</exception>
         /// <exception cref="InvalidOperationException">The stream is not open</exception>
-        /// <exception cref="ArgumentOutOfRangeException">Second is out of range</exception>
+        /// <exception cref="ArgumentOutOfRangeException"><see cref="CurrentPosition"/> is out of range</exception>
+        /// <exception cref="VideoStreamException">DirectShow failed to decode the frame, or returned unexpected data.</exception>
         public Bitmap GetBitmap()
         {
             if (disposedValue)
@@ -173,7 +189,7 @@ namespace DirectCapture
 
             var second = CurrentPosition;
             if (second < 0 || second > Duration)
-                throw new ArgumentOutOfRangeException($"second is out of range: second {second}");
+                throw new ArgumentOutOfRangeException(nameof(CurrentPosition), second, "The position is out of range.");
 
             return GetBitmap(_mediaDet, second);
         }
@@ -188,9 +204,33 @@ namespace DirectCapture
         [DllImport("kernel32.dll", EntryPoint = "RtlMoveMemory")]
         private static extern void CopyMemory(IntPtr Destination, IntPtr Source, int Length);
 
+        /// <summary>
+        /// Create an exception for frame data that DirectShow returned in an unexpected form.
+        /// </summary>
+        /// <param name="message">Details of what was wrong.</param>
+        /// <returns>An exception with HRESULT <c>E_FAIL</c>.</returns>
         private static VideoStreamException InvalidFrame(string message) =>
-            new VideoStreamException(new COMException($"Invalid frame data ({message})", unchecked((int)0x80004005))); // E_FAIL
+            new VideoStreamException(new COMException($"Invalid frame data ({message})", unchecked((int)0x80004005)));
 
+        /// <summary>
+        /// Decode the frame at the given time and copy it into a new <see cref="Bitmap"/>.
+        /// </summary>
+        /// <param name="mediaDet">The open media detector.</param>
+        /// <param name="second">The time of the frame, in seconds.</param>
+        /// <returns>A 24bpp bitmap of the frame.</returns>
+        /// <exception cref="VideoStreamException">DirectShow returned an error or unexpected data.</exception>
+        /// <remarks>
+        /// <c>IMediaDet.GetBitmapBits</c> is called twice: first with a null buffer to get the required size,
+        /// then with an allocated buffer to receive the frame.
+        /// <para>
+        /// The buffer holds a BITMAPINFOHEADER followed by 24-bit pixel data. The header and buffer size are
+        /// validated before any pixel is read, so malformed data can never cause an out-of-bounds read.
+        /// </para>
+        /// <para>
+        /// DIB rows are padded to a multiple of 4 bytes, and a positive height means the rows are stored
+        /// bottom-up, so rows are copied one by one in display order.
+        /// </para>
+        /// </remarks>
         private Bitmap GetBitmap(IMediaDet mediaDet, double second)
         {
             Bitmap bitmap = null;
@@ -200,19 +240,15 @@ namespace DirectCapture
             var height = _videoInfo.Height;
             try
             {
-                // Need to get the bufferSize and identify the required buffer size
                 int hr;
                 hr = mediaDet.GetBitmapBits(second, out int bufferSize, pBuffer, width, height);
                 DsError.ThrowExceptionForHR(hr);
 
                 pBuffer = Marshal.AllocCoTaskMem(bufferSize);
 
-                // Copy the bitmap bits into the buffer. This is what we actually want to do
                 hr = mediaDet.GetBitmapBits(second, out bufferSize, pBuffer, width, height);
                 DsError.ThrowExceptionForHR(hr);
 
-                // The buffer is a BITMAPINFOHEADER followed by 24-bit pixel data.
-                // Validate it before reading so a malformed result can never cause an out-of-bounds read.
                 int headerSize = Marshal.SizeOf(typeof(BitmapInfoHeader));
                 if (bufferSize < headerSize)
                 {
@@ -229,14 +265,12 @@ namespace DirectCapture
                     throw InvalidFrame($"unexpected bitmap format: {bmpHeader.Width}x{bmpHeader.Height} {bmpHeader.BitCount}bpp");
                 }
 
-                // DIB rows are padded to a multiple of 4 bytes.
                 long srcStride = ((long)width * 3 + 3) & ~3L;
                 if ((long)bmpHeader.Size + srcStride * height > bufferSize)
                 {
                     throw InvalidFrame($"buffer too small for {width}x{height}: {bufferSize} bytes");
                 }
 
-                // A positive height means the DIB is stored bottom-up.
                 bool bottomUp = bmpHeader.Height > 0;
                 IntPtr pPixels = IntPtr.Add(pBuffer, bmpHeader.Size);
 
@@ -270,10 +304,8 @@ namespace DirectCapture
                     throw;
                 }
             }
-            catch (COMException e)
+            catch (COMException e) when (!(e is VideoStreamException))
             {
-                // DESError.ThrowExceptionForHR(hr) throws COMException internally,
-                // so catch it with a wrapped exception
                 throw new VideoStreamException(e);
             }
             finally

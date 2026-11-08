@@ -70,10 +70,11 @@ namespace DirectCapture
         /// <summary>
         /// Generate a new instance.
         /// </summary>
-        /// <param name="filePath"></param>
-        /// <exception cref="ArgumentNullException">Occurs when filePath is null.</exception>
+        /// <param name="filePath">The path of the <c>.avi</c> file.</param>
+        /// <exception cref="ArgumentNullException">Occurs when filePath is null or empty.</exception>
         /// <exception cref="FileNotFoundException">Occurs when the file specified by filePath does not exist.</exception>
         /// <exception cref="ArgumentException">Occurs when the file extension is not supported.</exception>
+        /// <exception cref="VideoStreamException">Occurs when DirectShow cannot open the file, or the stream is not a supported video.</exception>
         /// <remarks>Only <c>.avi</c> extension is supported for filePath</remarks>
         public VideoInfo(string filePath)
         {
@@ -83,40 +84,40 @@ namespace DirectCapture
             if (!File.Exists(filePath))
                 throw new FileNotFoundException("File not found", filePath);
 
-            if (!new string[] { ".avi" }.Any(x => Path.GetExtension(filePath).ToLower() == x))
+            if (!new string[] { ".avi" }.Any(x => Path.GetExtension(filePath).ToLowerInvariant() == x))
                 throw new ArgumentException("File extension is not supported", nameof(filePath));
 
             _fileInfo = new FileInfo(filePath);
             GetVideoProperties();
         }
 
-        // Here we open a stream from a file,
-        // retrieve the necessary information and set it to a member.
+        /// <summary>
+        /// Open the file with DirectShow and read its duration, frame rate and size into this object.
+        /// </summary>
+        /// <exception cref="VideoStreamException">DirectShow returned an error, or the stream is not a supported video.</exception>
+        /// <remarks>
+        /// DirectShow reports failures as HRESULTs; <c>DESError.ThrowExceptionForHR</c> turns them into
+        /// <see cref="COMException"/>, which is wrapped in <see cref="VideoStreamException"/>.
+        /// </remarks>
         private void GetVideoProperties()
         {
             IMediaDet mediaDet = (IMediaDet)new MediaDet();
             try
             {
                 int hr;
-                // Open the file
                 hr = mediaDet.put_Filename(FilePath);
                 DESError.ThrowExceptionForHR(hr);
 
-                // Get the length of the file
                 hr = mediaDet.get_StreamLength(out _duration);
                 DESError.ThrowExceptionForHR(hr);
 
-                // Get the frame rate
                 hr = mediaDet.get_FrameRate(out _frameRate);
                 DESError.ThrowExceptionForHR(hr);
 
-                // Get the video size
                 _displaySize = GetVideoSize(mediaDet);
             }
-            catch (COMException e)
+            catch (COMException e) when (!(e is VideoStreamException))
             {
-                // DESError.ThrowExceptionForHR(hr) throws COMException internally,
-                // so catch it with a wrapped exception
                 throw new VideoStreamException(e);
             }
             finally
@@ -125,15 +126,30 @@ namespace DirectCapture
             }
         }
 
+        /// <summary>
+        /// Create an exception for a stream that is not a supported video.
+        /// </summary>
+        /// <param name="message">Details of what was wrong.</param>
+        /// <returns>An exception with HRESULT <c>VFW_E_INVALIDMEDIATYPE</c>.</returns>
         private static VideoStreamException InvalidFormat(string message) =>
-            new VideoStreamException(new COMException($"Unsupported video stream ({message})", unchecked((int)0x80040200))); // VFW_E_INVALIDMEDIATYPE
+            new VideoStreamException(new COMException($"Unsupported video stream ({message})", unchecked((int)0x80040200)));
 
-        // Get video rendering size
+        /// <summary>
+        /// Get the video size from the stream's media type.
+        /// </summary>
+        /// <param name="mediaDet">A media detector with the file already open.</param>
+        /// <returns>The width and height of the video, in pixels.</returns>
+        /// <exception cref="VideoStreamException">DirectShow returned an error, or the stream is not a supported video.</exception>
+        /// <remarks>
+        /// The layout of the format block depends on <c>formatType</c>, so the size is read from
+        /// <see cref="VideoInfoHeader"/> or <see cref="VideoInfoHeader2"/> accordingly;
+        /// reading the wrong struct would give a wrong size.
+        /// A negative bitmap height means a top-down bitmap, so the absolute value is used.
+        /// </remarks>
         private Size GetVideoSize(IMediaDet mediaDet)
         {
             double width, height;
 
-            // Get the media type, to get the video size by using the VideoInfoHeader
             AMMediaType mediaType = new AMMediaType();
             try
             {
@@ -141,14 +157,12 @@ namespace DirectCapture
                 hr = mediaDet.get_StreamMediaType(mediaType);
                 DESError.ThrowExceptionForHR(hr);
 
-                // Check if the major type is video
                 if (mediaType.majorType != MediaType.Video)
                     throw InvalidFormat("major type is not video");
 
                 if (mediaType.formatPtr == IntPtr.Zero)
                     throw InvalidFormat("format block is missing");
 
-                // The format block layout depends on formatType; reading the wrong struct gives a wrong size.
                 BitmapInfoHeader bmiHeader;
                 if (mediaType.formatType == FormatType.VideoInfo
                     && mediaType.formatSize >= Marshal.SizeOf(typeof(VideoInfoHeader)))
@@ -166,15 +180,12 @@ namespace DirectCapture
                 }
 
                 width = bmiHeader.Width;
-                // A negative height means a top-down bitmap; the size is the absolute value.
                 height = Math.Abs(bmiHeader.Height);
                 if (width <= 0 || height <= 0)
                     throw InvalidFormat($"invalid video size {width}x{height}");
             }
-            catch (COMException e)
+            catch (COMException e) when (!(e is VideoStreamException))
             {
-                // DESError.ThrowExceptionForHR(hr) throws COMException internally,
-                // so catch it with a wrapped exception
                 throw new VideoStreamException(e);
             }
             finally
