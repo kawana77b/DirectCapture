@@ -169,7 +169,7 @@ namespace DirectCapture
                 throw new InvalidOperationException("The stream is not open");
 
             var second = CurrentPosition;
-            if (second < 0 && second > Duration)
+            if (second < 0 || second > Duration)
                 throw new ArgumentOutOfRangeException($"second is out of range: second {second}");
 
             return GetBitmap(_mediaDet, second);

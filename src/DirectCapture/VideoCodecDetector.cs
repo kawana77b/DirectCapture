@@ -161,12 +161,14 @@ namespace DirectCapture
             {
                 case "MJPG":
                     return Codec.MotionJPEG;
+
                 case "DIVX":
                 case "DX50":
                 case "XVID":
                 case "FMP4":
                 case "MP4V":
                     return Codec.MPEG4ASP;
+
                 case "H264":
                 case "X264":
                 case "AVC1":
