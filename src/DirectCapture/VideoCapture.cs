@@ -185,6 +185,9 @@ namespace DirectCapture
         [DllImport("kernel32.dll", EntryPoint = "RtlMoveMemory")]
         private static extern void CopyMemory(IntPtr Destination, IntPtr Source, int Length);
 
+        private static VideoStreamException InvalidFrame(string message) =>
+            new VideoStreamException(new COMException($"Invalid frame data ({message})", unchecked((int)0x80004005))); // E_FAIL
+
         private Bitmap GetBitmap(IMediaDet mediaDet, double second)
         {
             Bitmap bitmap = null;
@@ -205,38 +208,54 @@ namespace DirectCapture
                 hr = mediaDet.GetBitmapBits(second, out bufferSize, pBuffer, width, height);
                 DsError.ThrowExceptionForHR(hr);
 
-                unsafe
+                // The buffer is a BITMAPINFOHEADER followed by 24-bit pixel data.
+                // Validate it before reading so a malformed result can never cause an out-of-bounds read.
+                int headerSize = Marshal.SizeOf(typeof(BitmapInfoHeader));
+                if (bufferSize < headerSize)
+                    throw InvalidFrame($"buffer too small: {bufferSize} bytes");
+
+                BitmapInfoHeader bmpHeader = (BitmapInfoHeader)Marshal.PtrToStructure(pBuffer, typeof(BitmapInfoHeader));
+                if (bmpHeader.Size < headerSize || bmpHeader.BitCount != 24
+                    || bmpHeader.Width != width || Math.Abs(bmpHeader.Height) != height)
+                    throw InvalidFrame($"unexpected bitmap format: {bmpHeader.Width}x{bmpHeader.Height} {bmpHeader.BitCount}bpp");
+
+                // DIB rows are padded to a multiple of 4 bytes.
+                long srcStride = ((long)width * 3 + 3) & ~3L;
+                if ((long)bmpHeader.Size + srcStride * height > bufferSize)
+                    throw InvalidFrame($"buffer too small for {width}x{height}: {bufferSize} bytes");
+
+                // A positive height means the DIB is stored bottom-up.
+                bool bottomUp = bmpHeader.Height > 0;
+                IntPtr pPixels = IntPtr.Add(pBuffer, bmpHeader.Size);
+
+                bitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb);
+                try
                 {
-                    // Get the pointer to the bitmap bits
-                    byte* pBmpBuffer = (byte*)pBuffer.ToPointer();
-                    BitmapInfoHeader bmpHeader = (BitmapInfoHeader)Marshal.PtrToStructure(pBuffer, typeof(BitmapInfoHeader));
-
-                    pBmpBuffer += bmpHeader.Size;
-
-                    // Create an empty Bitmap with screen information in it to write data
-                    bitmap = new Bitmap(
-                        width,
-                        height,
-                        PixelFormat.Format24bppRgb);
-
-                    // Lock the bitmap's bits
                     BitmapData data = bitmap.LockBits(
                         new Rectangle(0, 0, width, height),
                         ImageLockMode.WriteOnly,
                         PixelFormat.Format24bppRgb);
-
-                    // Copy data into the bitmap
-                    IntPtr pBmpData = new IntPtr(pBmpBuffer);
-                    CopyMemory(
-                        data.Scan0,
-                        pBmpData,
-                        width * height * 3); // To use RGB channels, multiply by 3 for the number of bytes in a pixel
-
-                    bitmap.UnlockBits(data);
+                    try
+                    {
+                        int rowBytes = width * 3;
+                        for (int y = 0; y < height; y++)
+                        {
+                            int srcRow = bottomUp ? height - 1 - y : y;
+                            IntPtr src = new IntPtr(pPixels.ToInt64() + srcRow * srcStride);
+                            IntPtr dst = new IntPtr(data.Scan0.ToInt64() + (long)y * data.Stride);
+                            CopyMemory(dst, src, rowBytes);
+                        }
+                    }
+                    finally
+                    {
+                        bitmap.UnlockBits(data);
+                    }
                 }
-
-                // The generated bitmap must be inverted
-                bitmap.RotateFlip(RotateFlipType.Rotate180FlipX);
+                catch
+                {
+                    bitmap.Dispose();
+                    throw;
+                }
             }
             catch (COMException e)
             {
