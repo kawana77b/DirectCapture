@@ -215,17 +215,26 @@ namespace DirectCapture
                 // Validate it before reading so a malformed result can never cause an out-of-bounds read.
                 int headerSize = Marshal.SizeOf(typeof(BitmapInfoHeader));
                 if (bufferSize < headerSize)
+                {
                     throw InvalidFrame($"buffer too small: {bufferSize} bytes");
+                }
 
                 BitmapInfoHeader bmpHeader = (BitmapInfoHeader)Marshal.PtrToStructure(pBuffer, typeof(BitmapInfoHeader));
-                if (bmpHeader.Size < headerSize || bmpHeader.BitCount != 24
-                    || bmpHeader.Width != width || Math.Abs(bmpHeader.Height) != height)
+                if (
+                    bmpHeader.Size < headerSize ||
+                    bmpHeader.BitCount != 24 ||
+                    bmpHeader.Width != width ||
+                    Math.Abs(bmpHeader.Height) != height)
+                {
                     throw InvalidFrame($"unexpected bitmap format: {bmpHeader.Width}x{bmpHeader.Height} {bmpHeader.BitCount}bpp");
+                }
 
                 // DIB rows are padded to a multiple of 4 bytes.
                 long srcStride = ((long)width * 3 + 3) & ~3L;
                 if ((long)bmpHeader.Size + srcStride * height > bufferSize)
+                {
                     throw InvalidFrame($"buffer too small for {width}x{height}: {bufferSize} bytes");
+                }
 
                 // A positive height means the DIB is stored bottom-up.
                 bool bottomUp = bmpHeader.Height > 0;
@@ -237,7 +246,8 @@ namespace DirectCapture
                     BitmapData data = bitmap.LockBits(
                         new Rectangle(0, 0, width, height),
                         ImageLockMode.WriteOnly,
-                        PixelFormat.Format24bppRgb);
+                        PixelFormat.Format24bppRgb
+                    );
                     try
                     {
                         int rowBytes = width * 3;
