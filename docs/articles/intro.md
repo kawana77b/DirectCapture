@@ -32,7 +32,7 @@ Or clone the repository and include the project.
 Currently I am not willing to host this project in NuGet.
 
 > [!WARNING]
-> As of `v0.5.4`,  
+> As of `v0.5.5`,  
 > For Windows only.  
 > Target framework is currently configured with .NET 10 (Windows) and .NET Framework 4.8.1.  
 > And PlatformTarget is `x64`.
