@@ -10,6 +10,15 @@ namespace DirectCapture
     /// <summary>
     /// Open the .avi stream in DirectShow and capture the video.
     /// </summary>
+    /// <remarks>
+    /// This class is not thread-safe. Use each instance from a single thread,
+    /// preferably an STA thread, since the underlying DirectShow MediaDet object is an STA COM object.
+    /// To process frames in parallel, create one instance per thread.
+    /// <para>
+    /// Decoding is done by the DirectShow filters and codecs installed on the system, inside this process.
+    /// Only open files from trusted sources.
+    /// </para>
+    /// </remarks>
     public class VideoCapture : IDisposable
     {
         private bool disposedValue;

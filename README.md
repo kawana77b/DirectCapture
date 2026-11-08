@@ -51,6 +51,11 @@ For Windows only.
 Target framework is currently configured with .NET 10 (Windows) and .NET Framework 4.8.1.  
 And PlatformTarget is x64.
 
+## Notes
+
+- `VideoCapture` is not thread-safe. Use each instance from a single thread (an STA thread is recommended, since DirectShow `MediaDet` is an STA COM object). Create one instance per thread for parallel work.  
+- Frames are decoded in-process by the DirectShow filters and codecs installed on the system. Only open files from trusted sources.
+
 ## Why did you create this?
 
 `DirectShow` is a very legacy API, but it may be necessary for organizations that deal with some specialized video codecs.
