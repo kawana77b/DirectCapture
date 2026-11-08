@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System;
+using System.Runtime.InteropServices;
 
 /* **************************************************************
  *
@@ -45,9 +46,13 @@ namespace DirectCapture
         /// Generate a new instance
         /// </summary>
         /// <param name="error"></param>
+        /// <exception cref="ArgumentNullException"><paramref name="error"/> is null.</exception>
         public VideoStreamException(COMException error)
+            : base(error?.Message, error)
         {
-            _error = error;
+            _error = error ?? throw new ArgumentNullException(nameof(error));
+            // Keep the original HRESULT so callers checking HResult see the real error.
+            HResult = error.ErrorCode;
         }
 
         /// <summary>
