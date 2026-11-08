@@ -125,6 +125,9 @@ namespace DirectCapture
             }
         }
 
+        private static VideoStreamException InvalidFormat(string message) =>
+            new VideoStreamException(new COMException($"Unsupported video stream ({message})", unchecked((int)0x80040200))); // VFW_E_INVALIDMEDIATYPE
+
         // Get video rendering size
         private Size GetVideoSize(IMediaDet mediaDet)
         {
@@ -140,12 +143,33 @@ namespace DirectCapture
 
                 // Check if the major type is video
                 if (mediaType.majorType != MediaType.Video)
-                    throw new ArgumentException("Major type is not video");
+                    throw InvalidFormat("major type is not video");
 
-                VideoInfoHeader videoInfoHeader = (VideoInfoHeader)Marshal.PtrToStructure(mediaType.formatPtr, typeof(VideoInfoHeader));
+                if (mediaType.formatPtr == IntPtr.Zero)
+                    throw InvalidFormat("format block is missing");
 
-                width = videoInfoHeader.BmiHeader.Width;
-                height = videoInfoHeader.BmiHeader.Height;
+                // The format block layout depends on formatType; reading the wrong struct gives a wrong size.
+                BitmapInfoHeader bmiHeader;
+                if (mediaType.formatType == FormatType.VideoInfo
+                    && mediaType.formatSize >= Marshal.SizeOf(typeof(VideoInfoHeader)))
+                {
+                    bmiHeader = ((VideoInfoHeader)Marshal.PtrToStructure(mediaType.formatPtr, typeof(VideoInfoHeader))).BmiHeader;
+                }
+                else if (mediaType.formatType == FormatType.VideoInfo2
+                    && mediaType.formatSize >= Marshal.SizeOf(typeof(VideoInfoHeader2)))
+                {
+                    bmiHeader = ((VideoInfoHeader2)Marshal.PtrToStructure(mediaType.formatPtr, typeof(VideoInfoHeader2))).BmiHeader;
+                }
+                else
+                {
+                    throw InvalidFormat($"unsupported format type {mediaType.formatType}");
+                }
+
+                width = bmiHeader.Width;
+                // A negative height means a top-down bitmap; the size is the absolute value.
+                height = Math.Abs(bmiHeader.Height);
+                if (width <= 0 || height <= 0)
+                    throw InvalidFormat($"invalid video size {width}x{height}");
             }
             catch (COMException e)
             {
