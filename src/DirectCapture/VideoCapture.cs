@@ -240,15 +240,20 @@ namespace DirectCapture
             var height = _videoInfo.Height;
             try
             {
+                // 1. Ask for the required buffer size. Passing a null buffer only returns the size.
                 int hr;
                 hr = mediaDet.GetBitmapBits(second, out int bufferSize, pBuffer, width, height);
                 DsError.ThrowExceptionForHR(hr);
 
+                // 2. Allocate the buffer and decode the frame into it.
+                //    The buffer layout is: [BITMAPINFOHEADER][pixel rows (24-bit BGR)]
                 pBuffer = Marshal.AllocCoTaskMem(bufferSize);
 
                 hr = mediaDet.GetBitmapBits(second, out bufferSize, pBuffer, width, height);
                 DsError.ThrowExceptionForHR(hr);
 
+                // 3. Validate the header before touching any pixel data,
+                //    so unexpected output can never make us read past the buffer.
                 int headerSize = Marshal.SizeOf(typeof(BitmapInfoHeader));
                 if (bufferSize < headerSize)
                 {
@@ -265,15 +270,22 @@ namespace DirectCapture
                     throw InvalidFrame($"unexpected bitmap format: {bmpHeader.Width}x{bmpHeader.Height} {bmpHeader.BitCount}bpp");
                 }
 
+                // 4. Check the buffer holds every pixel row.
+                //    Each DIB row is width * 3 bytes, rounded up to a multiple of 4 (the stride).
                 long srcStride = ((long)width * 3 + 3) & ~3L;
                 if ((long)bmpHeader.Size + srcStride * height > bufferSize)
                 {
                     throw InvalidFrame($"buffer too small for {width}x{height}: {bufferSize} bytes");
                 }
 
+                // 5. Locate the pixels. They start right after the header.
+                //    A positive height means the rows are stored bottom-up (last row first).
                 bool bottomUp = bmpHeader.Height > 0;
                 IntPtr pPixels = IntPtr.Add(pBuffer, bmpHeader.Size);
 
+                // 6. Copy the pixels into a new Bitmap, one row at a time.
+                //    Rows are copied individually because the source and destination strides may differ,
+                //    and because bottom-up rows must be reversed into top-down order.
                 bitmap = new Bitmap(width, height, PixelFormat.Format24bppRgb);
                 try
                 {
@@ -287,6 +299,7 @@ namespace DirectCapture
                         int rowBytes = width * 3;
                         for (int y = 0; y < height; y++)
                         {
+                            // y is the destination row (top-down); pick the matching source row.
                             int srcRow = bottomUp ? height - 1 - y : y;
                             IntPtr src = new IntPtr(pPixels.ToInt64() + srcRow * srcStride);
                             IntPtr dst = new IntPtr(data.Scan0.ToInt64() + (long)y * data.Stride);
@@ -300,6 +313,7 @@ namespace DirectCapture
                 }
                 catch
                 {
+                    // Do not leak a half-written Bitmap when copying fails.
                     bitmap.Dispose();
                     throw;
                 }
@@ -310,6 +324,7 @@ namespace DirectCapture
             }
             finally
             {
+                // The frame buffer is unmanaged memory and must always be freed.
                 if (pBuffer != IntPtr.Zero)
                     Marshal.FreeCoTaskMem(pBuffer);
             }

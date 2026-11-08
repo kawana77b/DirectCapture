@@ -150,19 +150,25 @@ namespace DirectCapture
         {
             double width, height;
 
+            // The media type owns unmanaged memory (the format block), so it is freed in finally.
             AMMediaType mediaType = new AMMediaType();
             try
             {
+                // 1. Get the media type of the current stream.
                 int hr;
                 hr = mediaDet.get_StreamMediaType(mediaType);
                 DESError.ThrowExceptionForHR(hr);
 
+                // 2. Make sure it is a video stream with a format block to read.
                 if (mediaType.majorType != MediaType.Video)
                     throw InvalidFormat("major type is not video");
 
                 if (mediaType.formatPtr == IntPtr.Zero)
                     throw InvalidFormat("format block is missing");
 
+                // 3. Read the BITMAPINFOHEADER from the format block.
+                //    formatType tells which struct the block holds, and formatSize must be
+                //    large enough for that struct before it is copied from unmanaged memory.
                 BitmapInfoHeader bmiHeader;
                 if (mediaType.formatType == FormatType.VideoInfo
                     && mediaType.formatSize >= Marshal.SizeOf(typeof(VideoInfoHeader)))
@@ -179,6 +185,7 @@ namespace DirectCapture
                     throw InvalidFormat($"unsupported format type {mediaType.formatType}");
                 }
 
+                // 4. Take the size. The height is negative for top-down bitmaps, so use its absolute value.
                 width = bmiHeader.Width;
                 height = Math.Abs(bmiHeader.Height);
                 if (width <= 0 || height <= 0)
